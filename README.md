@@ -60,7 +60,12 @@ are too thin to be a loop, are dropped, and the flattest of the rest is shown,
 with how much less it climbs than a typical loop of the same length from
 the same start. Out-and-backs are left out unless *Allow out and back*
 is ticked; with it they win more often than not (the Embarcadero, the
-Marina, the Great Highway). The search takes well under a second; up to about 20
+Marina, the Great Highway).
+
+**GPX** (next to *Copy link*) downloads the route on show as a GPX track
+with elevation, which Strava's route builder, Garmin Connect, Komoot and
+most running apps import. Clicking a unit on the numbers switches
+between miles and kilometres; the choice is kept on the device. The search takes well under a second; up to about 20
 miles it finds a loop from anywhere in the city, beyond that the city
 runs out.
 

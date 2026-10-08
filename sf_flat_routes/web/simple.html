@@ -52,7 +52,7 @@
   </label>
   <div class="statusrow">
     <div class="status" id="status"></div>
-    <button class="link" id="share" type="button" hidden>Copy link</button>
+    <span class="links"><button class="link" id="share" type="button" hidden>Copy link</button><button class="link" id="gpx" type="button" hidden title="Download this route as a GPX file for Strava, Garmin and the rest">GPX</button></span>
   </div>
   <input id="sharebox" type="text" readonly hidden aria-label="Link to this route">
   <div class="slider">
@@ -85,8 +85,11 @@
     bike, <i>prefer calm streets</i> counts protected lanes and paths
     (SFMTA bikeway network) as shorter than they are and busy arterials as
     longer.</p>
-    <p class="fine">Place search is offline: the city's intersections,
-    places and addresses are built into this page.
+    <p class="fine">Click a unit on the numbers to switch between miles
+    and kilometres. <i>GPX</i> downloads the route on show with its
+    elevation, for Strava, Garmin Connect, Komoot and the like. Place
+    search is offline: the city's intersections, places and addresses are
+    built into this page.
     <a href="/*__REPO_URL__*/">Source, data and the full analysis</a>.</p>
   </details>
   <p class="credit-inline">by <a href="https://almostimplemented.com" rel="author">Drew Edwards</a></p>

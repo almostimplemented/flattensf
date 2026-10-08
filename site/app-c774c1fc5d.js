@@ -1090,8 +1090,23 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
     return "rgb(" + stops[i].map((v, c) => Math.round(lerp(v, stops[i + 1][c], k))).join(",") + ")";
   }
 
-  const fmtMi = (m) => (m / MI < 10 ? (m / MI).toFixed(1) : Math.round(m / MI)) + "<small>mi</small>";
-  const fmtFt = (m) => Math.round(m * FT).toLocaleString() + "<small>ft</small>";
+  // miles and feet, or kilometres and metres: a preference kept on the device
+  const KM = 1000;
+  let units = "mi";
+  try { if (localStorage.getItem("flattensf.units") === "km") units = "km"; } catch (e) { /* private mode */ }
+  const distNum = (m) => { const v = units === "km" ? m / KM : m / MI; return v < 10 ? v.toFixed(1) : String(Math.round(v)); };
+  const distUnit = () => units === "km" ? "km" : "mi";
+  const climbNum = (m) => Math.round(units === "km" ? m : m * FT).toLocaleString();
+  const climbUnit = () => units === "km" ? "m" : "ft";
+  const fmtMi = (m) => distNum(m) + "<small>" + distUnit() + "</small>";
+  const fmtFt = (m) => climbNum(m) + "<small>" + climbUnit() + "</small>";
+  const distText = (m) => distNum(m) + " " + distUnit();
+  const climbText = (m) => climbNum(m) + " " + climbUnit();
+  // the loop slider runs in miles underneath; in kilometres it shows and
+  // steps in kilometres (2 to 24, by halves)
+  const loopSlider = () => units === "km"
+    ? { min: 2, max: 24, step: 0.5, unit: "km", toMi: (v) => v * KM / MI, fromMi: (mi) => Math.round(mi * MI / KM * 2) / 2 }
+    : { min: LOOP_MIN_MI, max: LOOP_MAX_MI, step: LOOP_STEP_MI, unit: "mi", toMi: (v) => v, fromMi: (mi) => mi };
   const fmtPct = (g) => (g * 100).toFixed(g * 100 < 10 ? 1 : 0) + "<small>%</small>";
 
   /* -------------------------------------------------------- text matching */
@@ -1554,7 +1569,7 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
         if (!this.state.loop) { this.state.t = +sl.value; this.show(); this.writeHash(); return; }
         // loop length: the label follows the thumb; the search runs once the
         // thumb settles, so dragging across the range does not queue searches
-        this.state.loopMi = +sl.value;
+        this.state.loopMi = loopSlider().toMi(+sl.value);
         $("slpos").textContent = fmtLoop(this.state.loopMi);
         clearTimeout(this._loopTimer);
         this._loopTimer = setTimeout(() => this.recompute("auto"), 350);
@@ -1564,6 +1579,12 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
         clearTimeout(this._loopTimer);
         this.recompute("auto");
       });
+      // clicking a unit on the stats switches miles and kilometres
+      for (const el of document.querySelectorAll(".stat .v")) {
+        el.addEventListener("click", (e) => { if (e.target.tagName === "SMALL") this.setUnits(units === "km" ? "mi" : "km"); });
+      }
+      this.setUnits(units);
+      $("gpx").addEventListener("click", () => this.downloadGpx());
       $("share").addEventListener("click", () => {
         const url = this.shareUrl(), box = $("sharebox"), btn = $("share");
         const done = () => { btn.textContent = "Link copied"; setTimeout(() => { btn.textContent = "Copy link"; }, 1800); };
@@ -1603,9 +1624,7 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
       $("obrow").hidden = !on;
       if (on) {
         this.state.savedTo = this.state.to; this.state.to = null;
-        sl.min = LOOP_MIN_MI; sl.max = LOOP_MAX_MI; sl.step = LOOP_STEP_MI; sl.value = this.state.loopMi;
-        sl.setAttribute("aria-label", "Loop length in miles");
-        $("end0").textContent = LOOP_MIN_MI + " mi"; $("end1").textContent = LOOP_MAX_MI + " mi";
+        this.loopSliderRange();
         $("slpos").textContent = fmtLoop(this.state.loopMi);
         $("to").tabIndex = -1;
       } else {
@@ -1621,6 +1640,27 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
       $("to").dataset.set = this.state.to ? "1" : "";
       this.drawMarkers();
       if (recompute) this.recompute(true);
+    },
+
+    /* the loop slider's range and labels in the current units */
+    loopSliderRange() {
+      const sl = $("sl"), r = loopSlider();
+      sl.min = r.min; sl.max = r.max; sl.step = r.step; sl.value = r.fromMi(this.state.loopMi);
+      sl.setAttribute("aria-label", "Loop length in " + (r.unit === "km" ? "kilometres" : "miles"));
+      $("end0").textContent = r.min + " " + r.unit; $("end1").textContent = r.max + " " + r.unit;
+      $("slpos").textContent = fmtLoop(this.state.loopMi);
+    },
+    /* switch between miles and kilometres and redraw what shows them */
+    setUnits(u) {
+      units = u;
+      try { localStorage.setItem("flattensf.units", u); } catch (e) { /* private mode */ }
+      for (const el of document.querySelectorAll(".stat .v small")) el.title = u === "km" ? "Switch to miles" : "Switch to kilometres";
+      if (this.state.loop) this.loopSliderRange();
+      if (this.family && this.shown) {
+        const m = this.shown;
+        this.drawStats(m, m);
+        if (!this._profAnim) this.drawProfile(m, m, 1);
+      }
     },
 
     /* the flattest loops of about the chosen length from the start */
@@ -1676,7 +1716,7 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
         // it (the length slider moved down), is refitted and recentred
         if (fit === true || (fit === "auto" && (!this.inView() || this.viewShare() < 0.35))) this.fit();
         this.writeHash();
-        $("share").hidden = false; $("sharebox").hidden = true;
+        $("share").hidden = false; $("gpx").hidden = false; $("sharebox").hidden = true;
       };
       setTimeout(run, 0);
     },
@@ -1765,7 +1805,7 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
       this.show(true);
       if (fit === true || (fit === "auto" && !this.inView())) this.fit();
       this.writeHash();
-      $("share").hidden = false; $("sharebox").hidden = true;
+      $("share").hidden = false; $("gpx").hidden = false; $("sharebox").hidden = true;
 
       const search = g.pareto(from.node, to.node, mode, {
         eps: EPS_GAIN_CM, epsNode: EPS_NODE_CM, stress: this.calm(),
@@ -1823,7 +1863,7 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
       $("turns").hidden = true;
       this.shown = null; this._handoff = null; this._profCur = null;
       $("result").hidden = true; $("prof").hidden = true; $("delta").textContent = ""; $("slpos").textContent = "";
-      $("share").hidden = true; $("sharebox").hidden = true;
+      $("share").hidden = true; $("gpx").hidden = true; $("sharebox").hidden = true;
       $("sl").disabled = false;
     },
 
@@ -1994,9 +2034,9 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
         const pd = sh.distance_m ? Math.round(100 * dd / sh.distance_m) : 0;
         const pc = sh.elev_gain_m ? Math.round(100 * dc / sh.elev_gain_m) : 0;
         const longer = dd < 80 ? "about the same distance"
-          : "<b class='up'>+" + (dd / MI).toFixed(1) + " mi</b> (" + pd + "% longer)";
+          : "<b class='up'>+" + distText(dd) + "</b> (" + pd + "% longer)";
         const less = dc <= 0 ? "no less climbing"
-          : "<b class='down'>−" + Math.round(dc * FT).toLocaleString() + " ft</b> of climbing (" + pc + "% less)";
+          : "<b class='down'>−" + climbText(dc) + "</b> of climbing (" + pc + "% less)";
         setText($("delta"), "vs. shortest: " + longer + ", " + less, true);
       }
     },
@@ -2010,8 +2050,8 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
       const ob = u.kind === "outback" ? "Out and back. " : "";
       if (f.shortfall) html = ob + "The longest loop that fits from here.";
       else if (Number.isFinite(med) && med - s.elev_gain_m >= 3 && f.tried >= 5) {
-        html = ob + "<b class='down'>−" + Math.round((med - s.elev_gain_m) * FT).toLocaleString()
-          + " ft</b> of climbing vs. a typical " + fmtLoop(this.state.loopMi) + " from here.";
+        html = ob + "<b class='down'>−" + climbText(med - s.elev_gain_m)
+          + "</b> of climbing vs. a typical " + fmtLoop(this.state.loopMi) + " from here.";
       } else html = ob + "About as flat as loops from here get.";
       swapText(box, (el) => {
         el.innerHTML = html;
@@ -2041,6 +2081,50 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
           el.append(" ", b);
         }
       });
+    },
+
+    /* ---------------------------------------------------------------- GPX */
+    /* the route on show as a GPX track with elevation, for Strava, Garmin
+     * Connect, Komoot and the rest */
+    gpxName() {
+      const { from, to, loop, t } = this.state, f = this.family;
+      if (loop) return fmtLoop(this.state.loopMi) + " from " + from.label;
+      const which = f && f.unique.length > 1 ? (this.shown === f.shortest ? ", shortest" : this.shown === f.unique[f.unique.length - 1] ? ", flattest" : "") : "";
+      return from.label + " to " + (to ? to.label : "") + which;
+    },
+    gpx() {
+      const u = this.shown, s = u.stats, pts = u.latlngs;
+      alongRoute(u, 0);                         // builds the cumulative length
+      const cum = u._cum, total = cum[cum.length - 1] || 1, pd = s.profile.d, pz = s.profile.z;
+      const span = pd[pd.length - 1] || 1;
+      let j = 0;
+      const ele = (i) => {
+        const want = cum[i] / total * span;
+        while (j < pd.length - 2 && pd[j + 1] < want) j++;
+        const t = pd[j + 1] > pd[j] ? clamp((want - pd[j]) / (pd[j + 1] - pd[j]), 0, 1) : 0;
+        return lerp(pz[j], pz[j + 1], t);
+      };
+      const esc = (x) => String(x).replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
+      const name = esc(this.gpxName()), desc = esc(distText(s.distance_m) + ", " + climbText(s.elev_gain_m) + " of climbing. Flatten SF, flattensf.com");
+      const out = ['<?xml version="1.0" encoding="UTF-8"?>',
+        '<gpx version="1.1" creator="Flatten SF - flattensf.com" xmlns="http://www.topografix.com/GPX/1/1">',
+        "<metadata><name>" + name + "</name><desc>" + desc + "</desc><link href=\"" + esc(this.shareUrl()) + "\"><text>Flatten SF</text></link></metadata>",
+        "<trk><name>" + name + "</name><desc>" + desc + "</desc><trkseg>"];
+      for (let i = 0; i < pts.length; i++) {
+        out.push('<trkpt lat="' + pts[i][0].toFixed(6) + '" lon="' + pts[i][1].toFixed(6) + '"><ele>' + ele(i).toFixed(1) + "</ele></trkpt>");
+      }
+      out.push("</trkseg></trk></gpx>");
+      return out.join("\n");
+    },
+    downloadGpx() {
+      if (!this.shown) return;
+      const text = this.gpx();
+      const slug = this.gpxName().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+      const blob = new Blob([text], { type: "application/gpx+xml" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "flattensf-" + slug + ".gpx";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     },
 
     /* ------------------------------------------------------------ profile */
@@ -2124,10 +2208,10 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
       ctx.fillStyle = css("--muted"); ctx.font = "500 10px " + css("--mono");
       ctx.textBaseline = "alphabetic";
       let hi = 0; for (let i = 1; i < n; i++) if (z[i] > z[hi]) hi = i;
-      const lab = (v) => Math.round(v * FT) + " ft";
+      const lab = (v) => climbText(v);
       ctx.textAlign = "left"; ctx.fillText(lab(z[0]), padL, H - 5);
       ctx.textAlign = "right"; ctx.fillText(lab(z[n - 1]), W - padR, H - 5);
-      ctx.textAlign = "center"; ctx.fillText((dist / MI).toFixed(1) + " mi", W / 2, H - 5);
+      ctx.textAlign = "center"; ctx.fillText(distText(dist), W / 2, H - 5);
       const hov = this._hover !== null && this._hover !== undefined && !this._scan && k >= 1 ? this._hover : null;
       if (hov === null && hi > n * 0.06 && hi < n * 0.94 && z[hi] - Math.min(z[0], z[n - 1]) > 6) {
         ctx.textAlign = X(hi) < 40 ? "left" : X(hi) > W - 40 ? "right" : "center";
@@ -2142,7 +2226,7 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
         ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, H - bottom); ctx.stroke(); ctx.globalAlpha = 1;
         ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI);
         ctx.fillStyle = colour; ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; ctx.stroke();
-        const text = (hov * dist / MI).toFixed(1) + " mi · " + lab(zv);
+        const text = distText(hov * dist) + " · " + lab(zv);
         ctx.font = "600 10px " + css("--mono");
         const tw = ctx.measureText(text).width + 10;
         let tx = x - tw / 2; tx = clamp(tx, padL, W - padR - tw);
@@ -2230,7 +2314,7 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
       const { from, to, mode, t } = this.state;
       const c = (p) => p.lon.toFixed(5) + "~" + p.lat.toFixed(5);
       const m = mode === "bike" ? (this.state.calm ? "b" : "bx") : "w";
-      if (this.state.loop) return ["l", c(from), m + (this.state.outBack ? "o" : ""), String(this.state.loopMi), String(this.state.loopIdx), encLabel(from.label)].join("~");
+      if (this.state.loop) return ["l", c(from), m + (this.state.outBack ? "o" : ""), String(+this.state.loopMi.toFixed(3)), String(this.state.loopIdx), encLabel(from.label)].join("~");
       return ["t", c(from), c(to), mode === "bike" ? (this.state.calm ? "b" : "bx") : "w", t.toFixed(3),
         encLabel(from.label), encLabel(to.label)].join("~");
     },
@@ -2273,7 +2357,8 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
       let m = parts[3] || "w";
       if (m.endsWith("o")) { m = m.slice(0, -1); this.state.outBack = true; $("outback").checked = true; }
       this.setMode(m);
-      this.state.loopMi = clamp(Math.round(mi / LOOP_STEP_MI) * LOOP_STEP_MI, LOOP_MIN_MI, LOOP_MAX_MI);
+      const r = loopSlider();
+      this.state.loopMi = clamp(r.toMi(Math.round(r.fromMi(mi) / r.step) * r.step), LOOP_MIN_MI, LOOP_MAX_MI);
       this.setPoint("from", this.pointAt(lon, lat, decLabel(parts[6] || "") || undefined), false);
       this.setLoop(true, false);
       this._pendingLoopIdx = Math.max(0, parseInt(parts[5], 10) || 0);
@@ -2289,7 +2374,10 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
     },
   };
 
-  function fmtLoop(mi) { return (Number.isInteger(mi) ? mi : mi.toFixed(1)) + " mi loop"; }
+  function fmtLoop(mi) {
+    const v = loopSlider().fromMi(mi);
+    return (Number.isInteger(v) ? v : v.toFixed(1)) + " " + loopSlider().unit + " loop";
+  }
 
   function encLabel(s) {
     let out = "";

@@ -109,7 +109,9 @@ input[type=range]:focus-visible{outline:2px solid var(--focus);outline-offset:4p
 .result{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .stat{min-width:0}
 .stat .v{font:600 20px/1.1 var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.stat .v small{font:500 12px var(--font);color:var(--muted);margin-left:2px}
+.stat .v small{font:500 12px var(--font);color:var(--muted);margin-left:2px;cursor:pointer}
+.stat .v small:hover{text-decoration:underline;text-underline-offset:2px}
+.links{display:flex;gap:10px;flex:none}
 .stat .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:3px}
 .delta{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .delta b{color:var(--ink);font-weight:600}
