@@ -141,3 +141,20 @@ details a{color:var(--accent)}
 }
 @keyframes lblin{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.expansion{display:flex;flex-direction:column;gap:5px}
+.expansion label{font-size:12px;font-weight:600}
+.expansion select{width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field);color:var(--ink);font:13px var(--font)}
+.expansion select:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.expansion small{color:var(--muted);font-size:11.5px;line-height:1.4}
+@media(max-width:640px){#card.typing .expansion{display:none}#card{max-height:70%}}
+
+.links{flex-wrap:wrap;justify-content:flex-end;row-gap:6px}
+.googlepanel{padding:10px;border:1px solid var(--line);border-radius:8px;color:var(--ink)}
+.googlepanel p,.googlepanel ol{font-size:12px;line-height:1.5;margin:8px 0}
+.googlepanel ol{padding-left:20px}
+.googlepanel li{margin:8px 0}
+.googlepanel label{display:block;font-size:12px;margin:8px 0 4px}
+.googlepanel input{width:100%;padding:10px;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:8px;font:12px var(--font);margin-bottom:8px}
+.googlepanel input:focus-visible{outline:2px solid var(--focus)}
+@media(max-width:640px){#card.typing .googlepanel{display:none}}

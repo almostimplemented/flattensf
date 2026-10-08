@@ -25,19 +25,11 @@
   const $ = (id) => document.getElementById(id);
   const DATA = window.DATA;
 
-  /* lambda sweep for the slider; the min-climb objective is appended as
-   * the last stop so the right-hand end is literally "fewest feet climbed" */
-  /* The flat end of the frontier is where a metre of climb is worth
-   * ALPHA_MAX metres of walking (the analysis's minimum-climb weight is
-   * 120). Past about 200 the router starts walking miles to save a few feet
-   * (7.5 miles instead of 4.6 to save 55 ft, on the default trip), which
-   * nobody would call a route, so the frontier is cut there. */
-  const ALPHA_MAX = 200;
-  /* frontier points closer than this in climbing are merged */
-  const EPS_GAIN_CM = 50;
-  /* the same tolerance inside the search, at intermediate nodes */
-  const EPS_NODE_CM = 10;
-  /* at most this many routes on the slider, spread evenly along the frontier */
+  const EXPANSION_DEFAULT = 400;
+  // Graph costs are integer centimetres. One unit rejects equal labels
+  // without merging any distinct climbing totals along the path.
+  const EPS_GAIN_CM = 1, EPS_NODE_CM = 1;
+  /* Only the displayed family is thinned; the search retains the flat endpoint. */
   const MAX_ROUTES = 30;
   /* loop mode: the slider is the loop's length, in miles */
   const LOOP_MIN_MI = 1, LOOP_MAX_MI = 15, LOOP_STEP_MI = 0.5, LOOP_DEFAULT_MI = 4;
@@ -311,7 +303,7 @@
 
   /* -------------------------------------------------------------- the app */
   const App = {
-    state: { mode: "walk", from: null, to: null, t: 1, focus: "from", calm: true,
+    state: { mode: "walk", from: null, to: null, t: 1, focus: "from", calm: true, expansion: EXPANSION_DEFAULT,
       loop: false, loopMi: LOOP_DEFAULT_MI, loopIdx: 0, savedTo: null, outBack: false },
     family: null, shown: null, fading: null,
 
@@ -523,7 +515,7 @@
           if (this.state.mode === btn.dataset.v) return;
           this.state.mode = btn.dataset.v;
           for (const b of $("mode").querySelectorAll("button")) b.setAttribute("aria-pressed", b === btn ? "true" : "false");
-          $("calmrow").hidden = this.state.mode !== "bike";
+          $("calmrow").hidden = this.state.mode !== "bike" || !this.state.loop;
           // endpoints may sit on stairs or a footpath that a bike cannot use
           for (const w of ["from", "to"]) {
             const p = this.state[w]; if (!p) continue;
@@ -534,6 +526,11 @@
       }
       $("calm").addEventListener("change", () => {
         this.state.calm = $("calm").checked;
+        this.recompute("auto");
+      });
+      $("expansion").addEventListener("change", () => {
+        this.state.expansion = +$("expansion").value;
+        this.updateExpansionHint();
         this.recompute("auto");
       });
       $("outback").addEventListener("change", () => {
@@ -560,6 +557,14 @@
       }
       this.setUnits(units);
       $("gpx").addEventListener("click", () => this.downloadGpx());
+      $("kml").addEventListener("click", () => this.downloadKml());
+      $("googlemap").addEventListener("click", () => {
+        const panel = $("googlepanel");
+        panel.hidden = false; panel.open = true;
+        $("googleurl").value = "";
+        $("googlestatus").textContent = "Import the route on show before pasting that map's link. This preserves the path as a saved line.";
+      });
+      $("googlecopy").addEventListener("click", () => this.copyGoogleMap());
       $("share").addEventListener("click", () => {
         const url = this.shareUrl(), box = $("sharebox"), btn = $("share");
         const done = () => { btn.textContent = "Link copied"; setTimeout(() => { btn.textContent = "Copy link"; }, 1800); };
@@ -573,12 +578,13 @@
     hideSuggest(which) { if (this["hide_" + which]) this["hide_" + which](); },
 
     /* ------------------------------------------------------------ routing */
-    /* length + alpha * gain, on real length (no comfort multipliers), so the
-     * family is a true distance-versus-climbing trade-off. On a bike with
-     * calm streets on, length is comfort-weighted instead (engine.js
-     * arcLenStress): a protected lane counts shorter, a busy arterial
-     * longer, and the climbing axis is untouched. */
-    calm() { return this.state.mode === "bike" && this.state.calm; },
+    /* A-to-B uses physical distance. Bike loops can use comfort-weighted
+     * length, where lanes count shorter and busy arterials count longer. */
+    updateExpansionHint() {
+      $("expansionhint").textContent = "A 1-mile shortest route can go up to "
+        + (1 + this.state.expansion / 100) + " miles. Longer is allowed, never forced.";
+    },
+    calm() { return this.state.loop && this.state.mode === "bike" && this.state.calm; },
     lenKey() { return this.calm() ? "stress_m" : "distance_m"; },
     weights(alpha) {
       return { alpha, beta: 0, gamma: 0, penalties: [0, 0, 0, 0, 0], extreme: 0,
@@ -597,6 +603,8 @@
       btn.setAttribute("aria-pressed", on ? "true" : "false");
       btn.title = label; btn.setAttribute("aria-label", label);
       $("obrow").hidden = !on;
+      $("expansionrow").hidden = on;
+      $("calmrow").hidden = !on || this.state.mode !== "bike";
       if (on) {
         this.state.savedTo = this.state.to; this.state.to = null;
         this.loopSliderRange();
@@ -640,6 +648,7 @@
 
     /* the flattest loops of about the chosen length from the start */
     recomputeLoop(fit) {
+      $("googlepanel").hidden = true;
       const { from, mode, loopMi } = this.state;
       this.family = null;
       const gen = ++this._gen;
@@ -691,7 +700,7 @@
         // it (the length slider moved down), is refitted and recentred
         if (fit === true || (fit === "auto" && (!this.inView() || this.viewShare() < 0.35))) this.fit();
         this.writeHash();
-        $("share").hidden = false; $("gpx").hidden = false; $("sharebox").hidden = true;
+        $("share").hidden = false; $("gpx").hidden = false; $("googlemap").hidden = false; $("sharebox").hidden = true;
       };
       setTimeout(run, 0);
     },
@@ -744,6 +753,7 @@
     },
 
     recompute(fit) {
+      $("googlepanel").hidden = true;
       if (this.state.loop) return this.recomputeLoop(fit);
       this.scanEnd();
       const { from, to, mode } = this.state;
@@ -764,38 +774,33 @@
           : "No route between those points.");
         return;
       }
-      // the shortest and the flattest routes go up at once, so the map can
-      // be fitted to the whole family; the frontier fills in between them
       const first = this.member(shortest.arcs);
-      const flat = g.route(from.node, to.node, mode, this.weights(ALPHA_MAX)) || shortest;
-      const fm = this.member(flat.arcs);
-      const flatStats = fm.stats;
-      const sameEnds = fm.arcs.length === first.arcs.length && fm.arcs.every((a, i) => a === first.arcs[i]);
-      this.family = { unique: sameEnds ? [first] : [first, fm], shortest: first, partial: true };
-      this.family.unique.forEach((m, i) => { m.id = i; });
+      const distanceCap = Math.round(first.stats.distance_m * g.DM) * (1 + this.state.expansion / 100);
+      this.family = { unique: [first], shortest: first, partial: true };
+      first.id = 0;
       this.shown = null;
-      swapText($("status"), "Finding every route between shortest and flattest…");
+      swapText($("status"), "Searching for the least climbing within your distance limit…");
       $("sl").disabled = true;
       this.drawFamily();
       this.show(true);
       if (fit === true || (fit === "auto" && !this.inView())) this.fit();
       this.writeHash();
-      $("share").hidden = false; $("gpx").hidden = false; $("sharebox").hidden = true;
+      $("share").hidden = false; $("gpx").hidden = false; $("googlemap").hidden = false; $("sharebox").hidden = true;
 
       const search = g.pareto(from.node, to.node, mode, {
         eps: EPS_GAIN_CM, epsNode: EPS_NODE_CM, stress: this.calm(),
-        dCap: Math.round(flatStats[this.lenKey()] * g.DM) + 1,
+        dCap: distanceCap,
         gCap: Math.round(first.stats.elev_gain_m * g.CM) + 1,
       });
       const run = () => {
         if (gen !== this._gen) return;          // the trip changed underneath us
         if (!search.step(30)) {
-          setText($("status"), "Finding every route between shortest and flattest… "
+          setText($("status"), "Searching for the least climbing within your distance limit… "
             + search.solutions.length);
           setTimeout(run, 0);
           return;
         }
-        this.finishFamily(search, first, fm, fit);
+        this.finishFamily(search, first, fit);
       };
       setTimeout(run, 0);
     },
@@ -808,25 +813,21 @@
 
     /* the frontier is in, sorted shortest to flattest: pick the routes the
      * slider will step through */
-    finishFamily(search, first, fm, fit) {
+    finishFamily(search, first, fit) {
       let members = search.solutions.map((r) => this.member(r.arcs));
       if (!members.length) members = [first];
       const key = this.lenKey();
       members.sort((a, b) => a.stats[key] - b.stats[key]);
-      // The weighted flattest route is a frontier point by construction.
-      // The search's tolerances can leave it out by a few feet, and if the
-      // search was cut short it is missing altogether, so it closes the
-      // family whenever it beats what the search found.
-      const last = members[members.length - 1];
-      if (fm.stats.elev_gain_m < last.stats.elev_gain_m - 1e-6) members.push(fm);
       this._search = search;
       members = thinFrontier(members, MAX_ROUTES);
       members.forEach((m, i) => { m.id = i; });
-      this.family = { unique: members, shortest: members[0], partial: false };
+      this.family = { unique: members, shortest: first, partial: false, truncated: search.truncated };
       $("sl").disabled = false;
-      swapText($("status"), members.length === 1
-        ? "One route: the shortest is already the flattest."
-        : members.length + " distinct routes, from shortest to flattest.");
+      swapText($("status"), search.truncated
+        ? "Search limit reached. Showing the best routes found so far."
+        : members.length === 1
+          ? "The shortest route already has the least climbing within this limit."
+          : members.length + " routes. Least climbing found within +" + this.state.expansion + "% distance.");
       this.drawFamily();
       this.show(false);
       if (fit && !this.inView()) this.fit();
@@ -838,7 +839,7 @@
       $("turns").hidden = true;
       this.shown = null; this._handoff = null; this._profCur = null;
       $("result").hidden = true; $("prof").hidden = true; $("delta").textContent = ""; $("slpos").textContent = "";
-      $("share").hidden = true; $("gpx").hidden = true; $("sharebox").hidden = true;
+      $("share").hidden = true; $("gpx").hidden = true; $("googlemap").hidden = true; $("googlepanel").hidden = true; $("sharebox").hidden = true;
       $("sl").disabled = false;
     },
 
@@ -858,6 +859,7 @@
 
     /* show the family member for the current slider position */
     show(immediate) {
+      $("googlepanel").hidden = true;
       if (!this.family) return;
       const loop = !!this.family.loop;
       const t = this.state.t, n = this.family.unique.length;
@@ -1056,6 +1058,39 @@
           el.append(" ", b);
         }
       });
+    },
+
+    /* Google My Maps imports this line without asking its directions
+     * engine to choose different streets. Keep every displayed vertex. */
+    kml() {
+      const name = this.gpxName().replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
+      const coordinates = this.shown.latlngs.map(([lat, lon]) => lon + "," + lat + ",0").join("\n");
+      return '<?xml version="1.0" encoding="UTF-8"?>\n'
+        + '<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>' + name + '</name>'
+        + '<Style id="route"><LineStyle><color>ff6f8f0f</color><width>5</width></LineStyle></Style>'
+        + '<Placemark><name>' + name + '</name><styleUrl>#route</styleUrl>'
+        + '<LineString><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode><coordinates>'
+        + coordinates + '</coordinates></LineString></Placemark></Document></kml>';
+    },
+    downloadKml() {
+      if (!this.shown) return;
+      const blob = new Blob([this.kml()], { type: "application/vnd.google-earth.kml+xml" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob); link.download = "flatten-sf-exact-route.kml";
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+    },
+    copyGoogleMap() {
+      const input = $("googleurl"), status = $("googlestatus");
+      // Validate without throwing for an empty or malformed pasted link.
+      const match = input.value.trim().match(/^https:\/\/(?:www\.)?google\.com\/maps\/d\/[^\s]*[?&]mid=([A-Za-z0-9_-]+)(?:[&#]|$)/);
+      if (!match) { status.textContent = "Paste the Google My Maps link after importing your route."; return; }
+      const url = "https://www.google.com/maps/d/viewer?mid=" + match[1];
+      input.value = url;
+      const copied = () => { status.textContent = "Google Maps link copied. The saved map keeps the imported path."; };
+      const fallback = () => { input.focus(); input.select(); status.textContent = "Select and copy the map link above."; };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(copied, fallback);
+      else fallback();
     },
 
     /* ---------------------------------------------------------------- GPX */
@@ -1291,7 +1326,7 @@
       const m = mode === "bike" ? (this.state.calm ? "b" : "bx") : "w";
       if (this.state.loop) return ["l", c(from), m + (this.state.outBack ? "o" : ""), String(+this.state.loopMi.toFixed(3)), String(this.state.loopIdx), encLabel(from.label)].join("~");
       return ["t", c(from), c(to), mode === "bike" ? (this.state.calm ? "b" : "bx") : "w", t.toFixed(3),
-        encLabel(from.label), encLabel(to.label)].join("~");
+        encLabel(from.label), encLabel(to.label), String(this.state.expansion)].join("~");
     },
     writeHash() {
       const { from, to } = this.state;
@@ -1316,9 +1351,13 @@
         this.state.mode = "bike";
         this.state.calm = parts[5] === "b";
         $("calm").checked = this.state.calm;
-        $("calmrow").hidden = false;
+        $("calmrow").hidden = !this.state.loop;
         for (const b of $("mode").querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.v === "bike" ? "true" : "false");
       }
+      const expansion = Number(parts[9]);
+      if ([0, 25, 50, 100, 200, 300, 400].includes(expansion)) this.state.expansion = expansion;
+      $("expansion").value = this.state.expansion;
+      this.updateExpansionHint();
       const tt = parseFloat(parts[6]);
       if (Number.isFinite(tt)) { this.state.t = clamp(tt, 0, 1); $("sl").value = this.state.t; }
       this.setPoint("from", this.pointAt(nums[0], nums[1], decLabel(parts[7]) || undefined), false);
@@ -1344,7 +1383,7 @@
       this.state.mode = "bike";
       this.state.calm = tok === "b";
       $("calm").checked = this.state.calm;
-      $("calmrow").hidden = false;
+      $("calmrow").hidden = !this.state.loop;
       for (const b of $("mode").querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.v === "bike" ? "true" : "false");
     },
   };
@@ -1524,7 +1563,7 @@
     el.classList.remove("fading");
   }
 
-  App.ALPHA_MAX = ALPHA_MAX; App._gen = 0;
+  App._gen = 0;
   window.App = App;
   App.start().catch((err) => {
     console.error(err);

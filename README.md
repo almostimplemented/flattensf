@@ -39,14 +39,18 @@ elevation profile and the list of streets follow along, street names are
 drawn on the route itself, and the faint lines are the other routes in the
 family, so you can see where they agree and where they part.
 
-On a bike, **prefer calm streets** (on by default) measures distance in
-comfort rather than feet: a block with a protected lane or path from the
-SFMTA bikeway network counts as 0.8 of its length, a quiet street as 1, a
-busy arterial without a lane as 1.4 to 2. The climbing axis is untouched,
-so the slider still runs from the shortest comfortable ride to the
-flattest; on twenty everyday trips across the city it adds about 7% to
-the distance ridden and takes the share on bare arterials from 29% to 1%.
-Untick it and the shortest end is the genuine shortest path.
+**Allow a longer route** sets the search's distance limit, from the shortest
+route only to **400% longer** (five times the shortest street distance).
+The default is 400%. The slider's flat end is the least total climbing
+within that limit, not a fixed climbing penalty. Longer routes are allowed,
+never forced, and a search that reaches its size limit is labelled as the
+best found so far. The allowance is included in shared trip links.
+
+A-to-B trips use physical street distance on foot and on a bike.
+**Prefer calm streets** is available for bike loops: a block with a
+protected lane or path from the SFMTA bikeway network counts as 0.8 of its
+length, a quiet street as 1, and a busy arterial without a lane as 1.4 to 2.
+The climbing axis is untouched. Untick it to use physical distance for loops.
 
 The **loop button** next to swap turns the trip into a run or ride that
 starts and ends in the same place. The slider becomes the loop's length
@@ -65,9 +69,19 @@ Marina, the Great Highway).
 **GPX** (next to *Copy link*) downloads the route on show as a GPX track
 with elevation, which Strava's route builder, Garmin Connect, Komoot and
 most running apps import. The *mi / km* switch at the top of the card
-picks the units; the choice is kept on the device. The search takes well under a second; up to about 20
-miles it finds a loop from anywhere in the city, beyond that the city
-runs out.
+picks the units; the choice is kept on the device. Up to about 20 miles it
+finds a loop from anywhere in the city, beyond that the city runs out.
+
+**Google My Maps** exports every vertex of the selected path as a KML line.
+Create a map in your Google account, import the downloaded file, then paste
+its saved link into the page to copy a clean viewer link. Importing the line
+preserves the streets chosen here instead of asking Google Directions to
+reroute them. Map creation and sharing happen in Google; the saved line is
+not turn-by-turn navigation.
+
+Routing and KML regression checks use the committed graph, with no Python
+data rebuild or extra Node packages: `node --test tests/expanded-routing.test.cjs`
+(Node 22 or newer).
 
 ![The route finder](outputs/screenshot_route_finder.png)
 

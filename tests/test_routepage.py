@@ -115,9 +115,8 @@ def page_results():
                      member: App.family.unique.includes(u),
                      endsAtCoit: Math.abs(end.lat - hit.lat) < 0.004 && Math.abs(end.lng - hit.lon) < 0.004 };
         }""")
-        # bike mode, Divisadero & Hayes to Marina Green: with calm streets on
-        # the ride goes up Scott (no bikeway, but quiet); off, straight up
-        # Divisadero, the shortest line and a busy arterial
+        # A-to-B bike distance is physical even when a shared link retains
+        # the calm preference, which now applies only to loops.
         page.evaluate("""() => {
             document.querySelector('#mode button[data-v=bike]').click();
             App.setPoint('from', App.pointAt(-122.4375, 37.7747, 'Divisadero & Hayes'), false);
@@ -139,7 +138,11 @@ def page_results():
                             && m.stats.elev_gain_m <= arr[i - 1].stats.elev_gain_m + 1e-6)) };
         }"""
         out["calm_on"] = page.evaluate(streets)
-        page.evaluate("() => document.getElementById('calm').click()")
+        page.evaluate("""() => {
+            App.state.calm = false;
+            document.getElementById('calm').checked = false;
+            App.recompute(false);
+        }""")
         page.wait_for_function("App.family && !App.family.partial && !App.state.calm", timeout=120_000)
         out["calm_off"] = page.evaluate(streets)
         # loop mode: the engine's loops, then the toggle, then a shared link
@@ -268,18 +271,16 @@ def test_the_loop_button_folds_the_destination_away_and_back(page_results):
     assert link["slVal"] == 3.5 and link["idx"] == min(1, link["n"] - 1)
 
 
-def test_calm_streets_keep_a_bike_off_divisadero(page_results):
+def test_bike_trip_distance_is_physical_regardless_of_saved_calm_preference(page_results):
     out, _ = page_results
     on, off = out["calm_on"], out["calm_off"]
     assert on["calm"] and not off["calm"]
-    assert not on["rowHidden"]
+    assert on["rowHidden"] and off["rowHidden"]
     assert on["token"].split("~")[5] == "b" and off["token"].split("~")[5] == "bx"
     assert off["streets"].get("Divisadero Street", 0) > 3000
-    assert on["streets"].get("Divisadero Street", 0) < 500
-    assert on["streets"].get("Scott Street", 0) > 3000
-    # calm costs a little real distance and buys a lot of comfort
-    assert on["distance_m"] < off["distance_m"] * 1.15
-    assert on["stress_m"] < off["stress_m"]
+    assert on["streets"] == off["streets"]
+    assert on["distance_m"] == off["distance_m"]
+    assert on["stress_m"] == off["stress_m"]
     # the family stays a frontier in the units it was searched in
     assert on["monotone"] and off["monotone"]
     assert on["n"] >= 2 and off["n"] >= 2
