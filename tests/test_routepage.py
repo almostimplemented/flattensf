@@ -188,6 +188,19 @@ def page_results():
                   wait_until="load", timeout=240_000)
         page.reload(wait_until="load", timeout=240_000)
         page.wait_for_function("window.App && App.family && App.family.loop", timeout=240_000)
+        # the GPX track and the units toggle
+        out["gpx"] = page.evaluate("""() => { const g = App.gpx(); const pts = g.match(/<trkpt /g) || [];
+            const eles = [...g.matchAll(/<ele>([-\\d.]+)<\\/ele>/g)].map(m => +m[1]);
+            return { points: pts.length, latlngs: App.shown.latlngs.length, name: (g.match(/<name>(.*?)<\\/name>/) || [])[1],
+              eleOk: eles.every(Number.isFinite), eleMin: Math.min(...eles), eleMax: Math.max(...eles),
+              header: g.startsWith('<?xml version="1.0"'), closed: g.trim().endsWith('</gpx>') }; }""")
+        page.click("#v_dist small"); page.wait_for_timeout(300)
+        out["units_km"] = page.evaluate("""() => ({ dist: document.getElementById('v_dist').textContent, climb: document.getElementById('v_climb').textContent,
+            delta: document.getElementById('delta').textContent, slMax: document.getElementById('sl').max, slpos: document.getElementById('slpos').textContent,
+            end1: document.getElementById('end1').textContent, mi: App.state.loopMi, stored: localStorage.getItem('flattensf.units') })""")
+        page.click("#v_climb small"); page.wait_for_timeout(300)
+        out["units_mi"] = page.evaluate("""() => ({ dist: document.getElementById('v_dist').textContent, slMax: document.getElementById('sl').max,
+            stored: localStorage.getItem('flattensf.units') })""")
         out["loop_link"] = page.evaluate("""() => ({ loop: App.state.loop, mi: App.state.loopMi,
             idx: App.state.loopIdx, from: document.getElementById('from').value,
             n: App.family.unique.length, slVal: +document.getElementById('sl').value })""")
@@ -219,6 +232,25 @@ def test_out_and_backs_are_offered_only_when_allowed_and_are_flatter(page_result
     assert best["kind"] == "outback" and best["overlap"] > 0.4, best
     assert best["gain"] < 0.5 * r["loops"][0]["gain"], (best, r["loops"][0])
     assert abs(best["length"] - 4 * 1609.344) <= 0.25 * 1609.344
+
+
+def test_the_gpx_track_carries_every_point_with_an_elevation(page_results):
+    out, _ = page_results
+    g = out["gpx"]
+    assert g["header"] and g["closed"], g
+    assert g["points"] == g["latlngs"] > 100, g
+    assert g["eleOk"] and 0 <= g["eleMin"] < g["eleMax"] < 300, g
+    assert "loop from" in g["name"], g
+
+
+def test_units_switch_to_kilometres_and_back(page_results):
+    out, _ = page_results
+    km, mi = out["units_km"], out["units_mi"]
+    assert km["dist"].endswith("km") and km["climb"].endswith("m") and " m of climbing" in km["delta"], km
+    # the loop slider runs 2 to 24 km in km mode; the target itself is unchanged
+    assert km["slMax"] == "24" and km["end1"] == "24 km" and km["slpos"].endswith("km loop"), km
+    assert km["stored"] == "km"
+    assert mi["dist"].endswith("mi") and mi["slMax"] == "15" and mi["stored"] == "mi", mi
 
 
 def test_the_loop_button_folds_the_destination_away_and_back(page_results):
