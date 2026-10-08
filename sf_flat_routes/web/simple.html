@@ -16,7 +16,13 @@
 <div id="map"></div>
 <div class="credit" id="credit">by <a href="https://almostimplemented.com" rel="author">Drew Edwards</a></div>
 <section id="card" aria-label="flattensf: plan a flat route">
-  <h1>Flatten SF <small>flat routes across San Francisco</small></h1>
+  <div class="head">
+    <h1>Flatten SF <small>flat routes across San Francisco</small></h1>
+    <div class="seg units" id="units" role="group" aria-label="Units">
+      <button type="button" data-u="mi" aria-pressed="true">mi</button>
+      <button type="button" data-u="km" aria-pressed="false">km</button>
+    </div>
+  </div>
   <div class="row">
     <div class="field">
       <label for="from">From</label>
@@ -85,8 +91,8 @@
     bike, <i>prefer calm streets</i> counts protected lanes and paths
     (SFMTA bikeway network) as shorter than they are and busy arterials as
     longer.</p>
-    <p class="fine">Click a unit on the numbers to switch between miles
-    and kilometres. <i>GPX</i> downloads the route on show with its
+    <p class="fine"><i>mi / km</i> at the top switches between miles and
+    kilometres. <i>GPX</i> downloads the route on show with its
     elevation, for Strava, Garmin Connect, Komoot and the like. Place
     search is offline: the city's intersections, places and addresses are
     built into this page.

@@ -727,7 +727,10 @@ body{background:var(--paper);color:var(--ink);font:14px/1.45 var(--font);overflo
 .nblabel{font:500 11px var(--font);color:var(--muted);letter-spacing:.02em;white-space:nowrap;transform:translate(-50%,-50%);opacity:.85;text-shadow:0 0 3px var(--paper),0 0 6px var(--paper)}
 
 #card{position:absolute;top:16px;left:16px;width:min(400px,calc(100% - 32px));max-height:calc(100% - 32px);overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.14);padding-block:14px;padding-inline:16px;z-index:1000;display:flex;flex-direction:column;gap:10px}
-h1{font-size:15px;font-weight:600;margin:0;letter-spacing:-.01em}
+.head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+h1{font-size:15px;font-weight:600;margin:0;letter-spacing:-.01em;min-width:0}
+.seg.units{flex:none;padding:2px;gap:2px}
+.seg.units button{flex:none;min-width:36px;padding:3px 8px;font-size:11.5px;letter-spacing:.02em}
 h1 small{font-weight:400;color:var(--muted);margin-left:6px;font-size:12px}
 .row{display:flex;gap:8px;align-items:center;min-width:0}
 .field{position:relative;flex:1;min-width:0}
@@ -781,8 +784,7 @@ input[type=range]:focus-visible{outline:2px solid var(--focus);outline-offset:4p
 .result{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .stat{min-width:0}
 .stat .v{font:600 20px/1.1 var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.stat .v small{font:500 12px var(--font);color:var(--muted);margin-left:2px;cursor:pointer}
-.stat .v small:hover{text-decoration:underline;text-underline-offset:2px}
+.stat .v small{font:500 12px var(--font);color:var(--muted);margin-left:2px}
 .links{display:flex;gap:10px;flex:none}
 .stat .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:3px}
 .delta{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -801,6 +803,7 @@ details{font-size:12px;color:var(--muted)}
 details summary{cursor:pointer;user-select:none}
 details a{color:var(--accent)}
 @media (max-width:640px){
+  h1 small{display:block;margin-left:0}
   .credit{display:none}
   .credit-inline{display:block}
   #card.typing .slider,#card.typing .result,#card.typing .delta,#card.typing #prof,#card.typing details,#card.typing .status{display:none}
@@ -816,7 +819,13 @@ details a{color:var(--accent)}
 <div id="map"></div>
 <div class="credit" id="credit">by <a href="https://almostimplemented.com" rel="author">Drew Edwards</a></div>
 <section id="card" aria-label="flattensf: plan a flat route">
-  <h1>Flatten SF <small>flat routes across San Francisco</small></h1>
+  <div class="head">
+    <h1>Flatten SF <small>flat routes across San Francisco</small></h1>
+    <div class="seg units" id="units" role="group" aria-label="Units">
+      <button type="button" data-u="mi" aria-pressed="true">mi</button>
+      <button type="button" data-u="km" aria-pressed="false">km</button>
+    </div>
+  </div>
   <div class="row">
     <div class="field">
       <label for="from">From</label>
@@ -885,8 +894,8 @@ details a{color:var(--accent)}
     bike, <i>prefer calm streets</i> counts protected lanes and paths
     (SFMTA bikeway network) as shorter than they are and busy arterials as
     longer.</p>
-    <p class="fine">Click a unit on the numbers to switch between miles
-    and kilometres. <i>GPX</i> downloads the route on show with its
+    <p class="fine"><i>mi / km</i> at the top switches between miles and
+    kilometres. <i>GPX</i> downloads the route on show with its
     elevation, for Strava, Garmin Connect, Komoot and the like. Place
     search is offline: the city's intersections, places and addresses are
     built into this page.
@@ -2482,9 +2491,8 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
         clearTimeout(this._loopTimer);
         this.recompute("auto");
       });
-      // clicking a unit on the stats switches miles and kilometres
-      for (const el of document.querySelectorAll(".stat .v")) {
-        el.addEventListener("click", (e) => { if (e.target.tagName === "SMALL") this.setUnits(units === "km" ? "mi" : "km"); });
+      for (const btn of $("units").querySelectorAll("button")) {
+        btn.addEventListener("click", () => { if (btn.dataset.u !== units) this.setUnits(btn.dataset.u); });
       }
       this.setUnits(units);
       $("gpx").addEventListener("click", () => this.downloadGpx());
@@ -2557,7 +2565,7 @@ window.Bundle = Bundle; window.inflate = inflate; window.loadBundle = loadBundle
     setUnits(u) {
       units = u;
       try { localStorage.setItem("flattensf.units", u); } catch (e) { /* private mode */ }
-      for (const el of document.querySelectorAll(".stat .v small")) el.title = u === "km" ? "Switch to miles" : "Switch to kilometres";
+      for (const b of $("units").querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.u === u ? "true" : "false");
       if (this.state.loop) this.loopSliderRange();
       if (this.family && this.shown) {
         const m = this.shown;

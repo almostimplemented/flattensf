@@ -555,9 +555,8 @@
         clearTimeout(this._loopTimer);
         this.recompute("auto");
       });
-      // clicking a unit on the stats switches miles and kilometres
-      for (const el of document.querySelectorAll(".stat .v")) {
-        el.addEventListener("click", (e) => { if (e.target.tagName === "SMALL") this.setUnits(units === "km" ? "mi" : "km"); });
+      for (const btn of $("units").querySelectorAll("button")) {
+        btn.addEventListener("click", () => { if (btn.dataset.u !== units) this.setUnits(btn.dataset.u); });
       }
       this.setUnits(units);
       $("gpx").addEventListener("click", () => this.downloadGpx());
@@ -630,7 +629,7 @@
     setUnits(u) {
       units = u;
       try { localStorage.setItem("flattensf.units", u); } catch (e) { /* private mode */ }
-      for (const el of document.querySelectorAll(".stat .v small")) el.title = u === "km" ? "Switch to miles" : "Switch to kilometres";
+      for (const b of $("units").querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.u === u ? "true" : "false");
       if (this.state.loop) this.loopSliderRange();
       if (this.family && this.shown) {
         const m = this.shown;

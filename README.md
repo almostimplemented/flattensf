@@ -64,8 +64,8 @@ Marina, the Great Highway).
 
 **GPX** (next to *Copy link*) downloads the route on show as a GPX track
 with elevation, which Strava's route builder, Garmin Connect, Komoot and
-most running apps import. Clicking a unit on the numbers switches
-between miles and kilometres; the choice is kept on the device. The search takes well under a second; up to about 20
+most running apps import. The *mi / km* switch at the top of the card
+picks the units; the choice is kept on the device. The search takes well under a second; up to about 20
 miles it finds a loop from anywhere in the city, beyond that the city
 runs out.
 

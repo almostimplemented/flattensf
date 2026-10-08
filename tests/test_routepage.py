@@ -194,11 +194,11 @@ def page_results():
             return { points: pts.length, latlngs: App.shown.latlngs.length, name: (g.match(/<name>(.*?)<\\/name>/) || [])[1],
               eleOk: eles.every(Number.isFinite), eleMin: Math.min(...eles), eleMax: Math.max(...eles),
               header: g.startsWith('<?xml version="1.0"'), closed: g.trim().endsWith('</gpx>') }; }""")
-        page.click("#v_dist small"); page.wait_for_timeout(300)
+        page.click("#units button[data-u=km]"); page.wait_for_timeout(300)
         out["units_km"] = page.evaluate("""() => ({ dist: document.getElementById('v_dist').textContent, climb: document.getElementById('v_climb').textContent,
             delta: document.getElementById('delta').textContent, slMax: document.getElementById('sl').max, slpos: document.getElementById('slpos').textContent,
             end1: document.getElementById('end1').textContent, mi: App.state.loopMi, stored: localStorage.getItem('flattensf.units') })""")
-        page.click("#v_climb small"); page.wait_for_timeout(300)
+        page.click("#units button[data-u=mi]"); page.wait_for_timeout(300)
         out["units_mi"] = page.evaluate("""() => ({ dist: document.getElementById('v_dist').textContent, slMax: document.getElementById('sl').max,
             stored: localStorage.getItem('flattensf.units') })""")
         out["loop_link"] = page.evaluate("""() => ({ loop: App.state.loop, mi: App.state.loopMi,
